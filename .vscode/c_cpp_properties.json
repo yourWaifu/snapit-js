@@ -1,0 +1,39 @@
+{
+    "configurations": [
+        {
+            "name": "Win32",
+            "includePath": [
+                "${workspaceFolder}/**",
+                "${workspaceFolder}/external/include",
+                "${workspaceFolder}/src"
+            ],
+            "defines": [
+                "_DEBUG",
+                "UNICODE",
+                "_UNICODE"
+            ],
+            "windowsSdkVersion": "10.0.22621.0",
+            "compilerPath": "cl.exe",
+            "cStandard": "c17",
+            "cppStandard": "c++17",
+            "intelliSenseMode": "windows-msvc-arm64",
+            "compilerArgs": [
+                "-DHERMESVM_HEAP_SEGMENT_SIZE_KB=4096",
+                "-DHERMESVM_GC_HADES",
+                "-DHERMESVM_ALLOW_COMPRESSED_POINTERS",
+                "-DHERMESVM_ALLOW_CONCURRENT_GC",
+                "-DHERMESVM_ALLOW_CONTIGUOUS_HEAP",
+                "-DHERMESVM_ALLOW_INLINE_ASM",
+                "-DHERMES_ENABLE_DEBUGGER",
+                "-DHERMES_LLVM",
+                "-DHERMES_MEMORY_INSTRUMENTATION",
+                "-DHERMES_RELEASE_VERSION=\"0.12.0\"",
+                "-D_WINDOWS",
+                "-DWIN32",
+                "-D_CRT_USE_BUILTIN_OFFSETOF",
+                "/std:c++17"
+            ]
+        }
+    ],
+    "version": 4
+}
