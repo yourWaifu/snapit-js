@@ -27,8 +27,11 @@ hermes::vm::RuntimeConfig makeRuntimeConfig()
       .build();
 }
 
-bool executeHBCBytecode(std::unique_ptr<hermes::Buffer> bytes, const std::string filename)
-{
+bool executeHBCBytecode(
+  std::unique_ptr<hermes::Buffer> bytes,
+  const std::string sourceName,
+  const BindingsDefine& bindings
+) {
   using namespace hermes;
   std::shared_ptr<hbc::BCProvider> bytecode = std::move(
     hbc::BCProviderFromBuffer::createBCProviderFromBuffer(
@@ -98,6 +101,8 @@ bool heapTimeline{false};
 
   vm::GCScope scope(*runtime);
 
+  bindings.install();
+
   vm::RuntimeModuleFlags flags;
   flags.persistent = true;
 
@@ -125,8 +130,8 @@ bool heapTimeline{false};
 #endif // HERMESVM_SAMPLING_PROFILER_AVAILABLE
 
   llvh::StringRef sourceURL{};
-  if (!filename.empty())
-    sourceURL = filename;
+  if (!sourceName.empty())
+    sourceURL = sourceName;
   vm::CallResult<vm::HermesValue> status = runtime->runBytecode(
       std::move(bytecode),
       flags,
