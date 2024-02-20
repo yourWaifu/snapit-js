@@ -1,6 +1,8 @@
 use autocxx::prelude::*;
 use autocxx::subclass::*;
 use ffi::BindingsDefine_methods;
+use std::borrow::Borrow;
+use core::pin::Pin;
 use std::env;
 use std::fs;
 
@@ -9,6 +11,7 @@ include_cpp! {
     safety!(unsafe_ffi)
     generate!("hermes::Buffer")
     generate!("hermes::vm::GCScopeMarkerRAII")
+    //generate!("hermes::vm::Runtime")
     subclass!("BindingsDefine", RustBindingsDefine)
     generate!("NativeFunctionDefine")
     concrete!("hermes::vm::Handle<hermes::vm::NativeFunction>", NativeFunctionHandle)
@@ -25,7 +28,7 @@ include_cpp! {
 pub struct RustBindingsDefine;
 
 impl BindingsDefine_methods for RustBindingsDefine {
-    fn install(&self) {
+    fn install(&self, runtime: Pin<&mut ffi::hermes::vm::Runtime>) {
         println!("install was called");
     }
 }

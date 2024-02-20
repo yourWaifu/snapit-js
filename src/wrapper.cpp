@@ -1,4 +1,8 @@
-#include "wrapper.hpp">
+#include "wrapper.hpp"
+
+BindingsDefine::FunctionContext& BindingsDefine::addFunction(std::shared_ptr<NativeFunction> ptr) {
+  return functionContextList.emplace_back(*this, ptr);
+}
 
 hermes::vm::RuntimeConfig makeRuntimeConfig()
 {
@@ -101,7 +105,7 @@ bool heapTimeline{false};
 
   vm::GCScope scope(*runtime);
 
-  bindings.install();
+  bindings.install(*runtime);
 
   vm::RuntimeModuleFlags flags;
   flags.persistent = true;
