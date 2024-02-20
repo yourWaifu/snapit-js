@@ -31,7 +31,7 @@ class NativeFunction;
 
 class BindingsDefine {
 public:
-    BindingsDefine() {}
+    BindingsDefine();
 
     struct FunctionContext {
         FunctionContext(
@@ -49,6 +49,11 @@ public:
 
     FunctionContext& addFunction(std::shared_ptr<NativeFunction> function);
 
+    inline FunctionContext& getDefaultFunctionContext() noexcept {
+        // functionContextList is initalized with an default function
+        return *functionContextList.begin();
+    }
+
 private:
     std::list<FunctionContext> functionContextList;
 };
@@ -62,7 +67,9 @@ bool executeHBCBytecode(
 class NativeFunction {
 public:
     virtual hermes::vm::CallResult<hermes::vm::HermesValue> impl(
-        BindingsDefine& context, hermes::vm::Runtime& runtime, hermes::vm::NativeArgs args
+        BindingsDefine& context,
+        hermes::vm::Runtime& runtime,
+        hermes::vm::NativeArgs args
     ) const {
         return hermes::vm::HermesValue::encodeUndefinedValue();
     };
@@ -78,7 +85,8 @@ struct NativeFunctionDefine {
         runtime(_runtime),
         parentHandle(_parentHandle),
         context(_context),
-        prototypeObjectHandle(_prototypeObjectHandle)
+        prototypeObjectHandle(_prototypeObjectHandle),
+        functionContext(&(context.getDefaultFunctionContext()))
     {};
     NativeFunctionDefine() = delete;
     
@@ -98,7 +106,10 @@ struct NativeFunctionDefine {
     }
 
     // The prototype property will be null
-    static inline NativeFunctionDefine withNullPrototype(hermes::vm::Runtime& _runtime, BindingsDefine& _context) {
+    static inline NativeFunctionDefine withNullPrototype(
+        hermes::vm::Runtime& _runtime,
+        BindingsDefine& _context
+    ) {
         return NativeFunctionDefine::withNullPrototype(
             _runtime,
             _context,
@@ -113,7 +124,8 @@ struct NativeFunctionDefine {
         functionPtr = [](
             void *context, hermes::vm::Runtime &runtime, hermes::vm::NativeArgs args
         ) -> hermes::vm::CallResult<hermes::vm::HermesValue> {
-            BindingsDefine::FunctionContext& functionContext = *static_cast<BindingsDefine::FunctionContext*>(context);
+            BindingsDefine::FunctionContext& functionContext = 
+                *static_cast<BindingsDefine::FunctionContext*>(context);
             return functionContext.func->impl(
                 functionContext.parent,
                 runtime,
@@ -137,5 +149,5 @@ struct NativeFunctionDefine {
     unsigned additionalSlotCount = 0U;
 
 private:
-    BindingsDefine::FunctionContext* functionContext = nullptr;
+    BindingsDefine::FunctionContext* functionContext;
 };

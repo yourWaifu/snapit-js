@@ -1,7 +1,6 @@
 use autocxx::prelude::*;
 use autocxx::subclass::*;
 use ffi::BindingsDefine_methods;
-use std::borrow::Borrow;
 use core::pin::Pin;
 use std::env;
 use std::fs;

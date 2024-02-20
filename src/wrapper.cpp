@@ -4,6 +4,10 @@ BindingsDefine::FunctionContext& BindingsDefine::addFunction(std::shared_ptr<Nat
   return functionContextList.emplace_back(*this, ptr);
 }
 
+BindingsDefine::BindingsDefine():
+  functionContextList({{*this, std::make_shared<NativeFunction>()}})
+{}
+
 hermes::vm::RuntimeConfig makeRuntimeConfig()
 {
   // to do, make options for these
