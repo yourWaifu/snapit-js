@@ -1,12 +1,46 @@
 #include "wrapper.hpp"
 
-BindingsDefine::FunctionContext& BindingsDefine::addFunction(std::shared_ptr<NativeFunction> ptr) {
-  return functionContextList.emplace_back(*this, ptr);
+BindingsDefine::BindingsDefine():
+  defaultFunctionContext({*this, defaultFunction})
+{
+  start();
 }
 
-BindingsDefine::BindingsDefine():
-  functionContextList({{*this, std::make_shared<NativeFunction>()}})
-{}
+std::unique_ptr<NativeFunctionDefine> BindingsDefine::function(
+  hermes::vm::Runtime& _runtime,
+  hermes::vm::Handle<hermes::vm::JSObject> _parentHandle,
+  hermes::vm::Handle<hermes::vm::JSObject> _prototypeObjectHandle
+) const {
+  return std::make_unique<::NativeFunctionDefine>(
+    _runtime, _parentHandle, *this, _prototypeObjectHandle
+  );
+}
+
+std::unique_ptr<NativeFunctionDefine> BindingsDefine::functionWithNullPrototype(
+    hermes::vm::Runtime& _runtime,
+    hermes::vm::Handle<hermes::vm::JSObject> _parentHandle
+) const {
+  return function(_runtime, _parentHandle, std::move(_runtime.makeNullHandle<hermes::vm::JSObject>()));
+}
+
+std::unique_ptr<NativeFunctionDefine> BindingsDefine::functionWithOnlyRuntime(
+    hermes::vm::Runtime& _runtime
+) const {
+  return functionWithNullPrototype(_runtime, std::move(hermes::vm::Handle<hermes::vm::JSObject>::vmcast(
+      &_runtime.functionPrototype
+  )));
+}
+
+hermes::vm::CallResult<hermes::vm::HermesValue> callFunctionContext(void *context, hermes::vm::Runtime &runtime, hermes::vm::NativeArgs args)
+{
+  BindingsDefine::FunctionContext& functionContext = 
+      *static_cast<BindingsDefine::FunctionContext*>(context);
+  /*return */functionContext.func.invoke(
+      functionContext.parent,
+      runtime/*,*/
+      /*args*/);
+  return hermes::vm::HermesValue::encodeUndefinedValue();
+}
 
 hermes::vm::RuntimeConfig makeRuntimeConfig()
 {
@@ -109,7 +143,7 @@ bool heapTimeline{false};
 
   vm::GCScope scope(*runtime);
 
-  bindings.install(*runtime);
+  bindings.install(*runtime, bindings);
 
   vm::RuntimeModuleFlags flags;
   flags.persistent = true;

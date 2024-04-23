@@ -27,7 +27,65 @@
 #include "hermes/BCGen/HBC/HBC.h"
 #include "hermes/VM/Runtime.h"
 
-class NativeFunction;
+class BindingsDefine;
+struct NativeFunctionDefine;
+
+struct NativeVFunctionReturnValue {
+    /* implicit */ NativeVFunctionReturnValue(hermes::vm::HermesValue&& value_) : status(hermes::vm::ExecutionStatus::RETURNED), value(std::move(value_)) {}
+    /* implicit */ NativeVFunctionReturnValue(hermes::vm::ExecutionStatus status_) : status(status_) {}
+
+    static NativeVFunctionReturnValue encodeUndefined() { return hermes::vm::HermesValue::encodeUndefinedValue(); }
+
+    hermes::vm::ExecutionStatus status;
+    hermes::vm::HermesValue value;
+};
+
+class NativeVFunction {
+public:
+    NativeVFunction() {};
+    using ReturnValue = NativeVFunctionReturnValue;
+
+    virtual ReturnValue invoke(
+        const BindingsDefine& context,
+        hermes::vm::Runtime& runtime/*,*/
+        //hermes::vm::NativeArgs& args
+    ) const {
+        return hermes::vm::HermesValue::encodeUndefinedValue();
+    };
+
+    virtual ~NativeVFunction() {};
+private:
+};
+
+//wrapper around handle to stop binding errors
+struct SymbolIDHandle {
+public:
+    using type_value = hermes::vm::SymbolID;
+    
+    SymbolIDHandle(hermes::vm::Handle<hermes::vm::SymbolID> _base): base(_base) {}
+
+    inline hermes::vm::Handle<hermes::vm::SymbolID> unwrapWrapper() const {
+        return base;
+    }
+
+    inline hermes::vm::SymbolID get() const {
+        return base.get();
+    }
+private:
+    hermes::vm::Handle<hermes::vm::SymbolID> base;
+};
+
+//wrapper around result to stop binding errors
+struct SymbolIDHandleResult {
+public:
+    SymbolIDHandleResult(hermes::vm::CallResult<hermes::vm::Handle<hermes::vm::SymbolID>> _base): base(std::move(_base)) {}
+    
+    inline hermes::vm::CallResult<hermes::vm::Handle<hermes::vm::SymbolID>>& unwrapWrapper() {
+        return base;
+    }
+private:
+    hermes::vm::CallResult<hermes::vm::Handle<hermes::vm::SymbolID>> base;
+};
 
 class BindingsDefine {
 public:
@@ -35,27 +93,72 @@ public:
 
     struct FunctionContext {
         FunctionContext(
-            BindingsDefine& _parent,
-            std::shared_ptr<NativeFunction> _func
+            const BindingsDefine& _parent,
+            const NativeVFunction& _func
         ): parent(_parent), func(_func) {}
         
-        BindingsDefine& parent;
-        std::shared_ptr<NativeFunction> func;
+        const BindingsDefine& parent;
+        const NativeVFunction& func;
     };
 
-    virtual void install(hermes::vm::Runtime& runtime) const {
+    virtual void start() {}
+
+    virtual void install(hermes::vm::Runtime& runtime, const BindingsDefine& bindingsDef) const {
         return;
     };
 
-    FunctionContext& addFunction(std::shared_ptr<NativeFunction> function);
+    inline const FunctionContext makeFunctionContext(const NativeVFunction& _func) const noexcept {
+        return FunctionContext{*this, _func};
+    }
 
-    inline FunctionContext& getDefaultFunctionContext() noexcept {
+    inline const FunctionContext& getDefaultFunctionContext() const noexcept {
         // functionContextList is initalized with an default function
-        return *functionContextList.begin();
+        return defaultFunctionContext;
+    }
+
+    std::unique_ptr<NativeFunctionDefine> function(
+        hermes::vm::Runtime& _runtime,
+        hermes::vm::Handle<hermes::vm::JSObject> _parentHandle,
+        hermes::vm::Handle<hermes::vm::JSObject> _prototypeObjectHandle
+    ) const;
+
+    std::unique_ptr<NativeFunctionDefine> functionWithNullPrototype(
+        hermes::vm::Runtime& _runtime,
+        hermes::vm::Handle<hermes::vm::JSObject> _parentHandle
+    ) const;
+
+    std::unique_ptr<NativeFunctionDefine> functionWithOnlyRuntime(
+        hermes::vm::Runtime& _runtime
+    ) const;
+
+    inline hermes::vm::IdentifierTable& getIdentifierTable(hermes::vm::Runtime& _runtime) const {
+        return _runtime.getIdentifierTable();
+    }
+
+    inline hermes::vm::UTF16Ref createUTF16Ref(const char16_t * str) const {
+        return hermes::vm::createUTF16Ref(str);
+    }
+
+    inline hermes::vm::ASCIIRef createASCIIRef(std::string str) const {
+        return hermes::vm::createASCIIRef(str.c_str());
+    }
+
+    inline SymbolIDHandleResult getSymbolHandleUTF16(hermes::vm::Runtime& runtime, hermes::vm::UTF16Ref str) const {
+        return runtime.getIdentifierTable().getSymbolHandle(runtime, str);
+    }
+
+    inline SymbolIDHandleResult getSymbolHandleASCII(hermes::vm::Runtime& runtime, hermes::vm::ASCIIRef str) const {
+        return runtime.getIdentifierTable().getSymbolHandle(runtime, str);
+    }
+
+    // to do fix this with generics somehow
+    inline SymbolIDHandle ignoreAllocationFailure(hermes::vm::Runtime& runtime, SymbolIDHandleResult res) const {
+        return runtime.ignoreAllocationFailure(res.unwrapWrapper());
     }
 
 private:
-    std::list<FunctionContext> functionContextList;
+    NativeVFunction defaultFunction;
+    const FunctionContext defaultFunctionContext;
 };
 
 bool executeHBCBytecode(
@@ -64,36 +167,26 @@ bool executeHBCBytecode(
     const BindingsDefine& bindings
 );
 
-class NativeFunction {
-public:
-    virtual hermes::vm::CallResult<hermes::vm::HermesValue> impl(
-        BindingsDefine& context,
-        hermes::vm::Runtime& runtime,
-        hermes::vm::NativeArgs args
-    ) const {
-        return hermes::vm::HermesValue::encodeUndefinedValue();
-    };
-};
+hermes::vm::CallResult<hermes::vm::HermesValue> callFunctionContext(void *context, hermes::vm::Runtime &runtime, hermes::vm::NativeArgs args);
 
 struct NativeFunctionDefine {
     NativeFunctionDefine(
         hermes::vm::Runtime& _runtime,
         hermes::vm::Handle<hermes::vm::JSObject> _parentHandle,
-        BindingsDefine& _context,
+        const BindingsDefine& _context,
         hermes::vm::Handle<hermes::vm::JSObject> _prototypeObjectHandle
     ):
         runtime(_runtime),
         parentHandle(_parentHandle),
-        context(_context),
         prototypeObjectHandle(_prototypeObjectHandle),
-        functionContext(&(context.getDefaultFunctionContext()))
+        functionContext(&(_context.getDefaultFunctionContext()))
     {};
     NativeFunctionDefine() = delete;
     
     // The prototype property will be null
     static inline NativeFunctionDefine withNullPrototype(
         hermes::vm::Runtime& _runtime,
-        BindingsDefine& _context,
+        const BindingsDefine& _context,
         hermes::vm::Handle<hermes::vm::JSObject> _parentHandle
     ) {
         NativeFunctionDefine target{
@@ -108,7 +201,7 @@ struct NativeFunctionDefine {
     // The prototype property will be null
     static inline NativeFunctionDefine withNullPrototype(
         hermes::vm::Runtime& _runtime,
-        BindingsDefine& _context
+        const BindingsDefine& _context
     ) {
         return NativeFunctionDefine::withNullPrototype(
             _runtime,
@@ -119,35 +212,35 @@ struct NativeFunctionDefine {
         );
     }
 
-    inline void setFunction(std::shared_ptr<NativeFunction> function) {
-        functionContext = &(context.addFunction(std::move(function)));
-        functionPtr = [](
-            void *context, hermes::vm::Runtime &runtime, hermes::vm::NativeArgs args
-        ) -> hermes::vm::CallResult<hermes::vm::HermesValue> {
-            BindingsDefine::FunctionContext& functionContext = 
-                *static_cast<BindingsDefine::FunctionContext*>(context);
-            return functionContext.func->impl(
-                functionContext.parent,
-                runtime,
-                std::move(args));
-        };
+    void setFunction(
+        hermes::vm::SymbolID name_,
+        const BindingsDefine::FunctionContext& function,
+        unsigned paramCount_
+    ) {
+        name = name_;
+        paramCount = paramCount_;
+        functionContext = &function;
     }
 
-    inline hermes::vm::Handle<hermes::vm::NativeFunction> create() {
-        return hermes::vm::NativeFunction::create(
-            runtime, parentHandle, functionContext, functionPtr, name,
-            paramCount, prototypeObjectHandle, additionalSlotCount);
+    bool define() const {
+        auto global = runtime.getGlobal();
+        auto normalFlags = hermes::vm::DefinePropertyFlags::getNewNonEnumerableFlags();
+        void * context = const_cast<BindingsDefine::FunctionContext*>(functionContext);
+        auto nativeFunction = hermes::vm::NativeFunction::create(
+            runtime, parentHandle, context, callFunctionContext, name, paramCount,
+            prototypeObjectHandle, additionalSlotCount);
+        auto res = hermes::vm::JSObject::defineOwnProperty(
+            global, runtime, name, normalFlags, nativeFunction);
+        return res != hermes::vm::ExecutionStatus::EXCEPTION && *res;
     }
     
     hermes::vm::Runtime& runtime;
     hermes::vm::Handle<hermes::vm::JSObject> parentHandle;
-    BindingsDefine& context;
-    hermes::vm::NativeFunctionPtr functionPtr;
     hermes::vm::SymbolID name;
-    unsigned paramCount;
+    unsigned paramCount = 0;
     hermes::vm::Handle<hermes::vm::JSObject> prototypeObjectHandle;
     unsigned additionalSlotCount = 0U;
 
 private:
-    BindingsDefine::FunctionContext* functionContext;
+    const BindingsDefine::FunctionContext* functionContext;
 };
