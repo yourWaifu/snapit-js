@@ -135,11 +135,11 @@ public:
         return _runtime.getIdentifierTable();
     }
 
-    inline hermes::vm::UTF16Ref createUTF16Ref(const char16_t * str) const {
-        return hermes::vm::createUTF16Ref(str);
+    inline hermes::vm::UTF16Ref createUTF16Ref(const std::u16string& str) const {
+        return hermes::vm::createUTF16Ref(str.c_str());
     }
 
-    inline hermes::vm::ASCIIRef createASCIIRef(std::string str) const {
+    inline hermes::vm::ASCIIRef createASCIIRef(const std::string& str) const {
         return hermes::vm::createASCIIRef(str.c_str());
     }
 

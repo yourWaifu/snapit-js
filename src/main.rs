@@ -77,18 +77,21 @@ impl BindingsDefine_methods for RustBindingsDefine {
     }
 
     fn install(&self, mut runtime: Pin<&mut ffi::hermes::vm::Runtime>, bindings_def: &ffi::BindingsDefine) {
+        use ffi::ToCppString;
         println!("install called");
         
         let normal_def_property_flags = ffi::hermes::vm::DefinePropertyFlags::getNewNonEnumerableFlags();
-        // I swear these are safe, they do not move runtime
+
         let mut function_bind_def: UniquePtr<ffi::NativeFunctionDefine> = bindings_def.functionWithOnlyRuntime(runtime.as_mut());
-        let symbol_handle_result = bindings_def.getSymbolHandleASCII(runtime.as_mut(), bindings_def.createASCIIRef("nativeTest")).within_unique_ptr();
+        let function_name_str = "nativeTest".into_cpp();
+        let symbol_handle_result = bindings_def.getSymbolHandleASCII(runtime.as_mut(), bindings_def.createASCIIRef(function_name_str.as_ref().expect("failed to create ASCII ref"))).within_unique_ptr();
         let symbol_handle = bindings_def.ignoreAllocationFailure(runtime.as_mut(), symbol_handle_result).within_unique_ptr();
         function_bind_def.as_mut().expect("null function bind deref").setFunction(
             symbol_handle.get().within_unique_ptr(),
-            &self.basic_function_context.as_ref().expect("basic function context is null"), //expect fails here for some reason
+            &self.basic_function_context.as_ref().expect("basic function context is null"),
             autocxx::c_uint::from(0u32));
-        let function_bind = function_bind_def.as_ref().expect("null function bind deref").define();
+        let function_bind_result = function_bind_def.as_ref().expect("null function bind deref").define();
+        assert!(function_bind_result, "failed to define function bind");
     }
 }
 

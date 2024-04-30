@@ -20,15 +20,15 @@ std::unique_ptr<NativeFunctionDefine> BindingsDefine::functionWithNullPrototype(
     hermes::vm::Runtime& _runtime,
     hermes::vm::Handle<hermes::vm::JSObject> _parentHandle
 ) const {
-  return function(_runtime, _parentHandle, std::move(_runtime.makeNullHandle<hermes::vm::JSObject>()));
+  return function(_runtime, _parentHandle, _runtime.makeNullHandle<hermes::vm::JSObject>());
 }
 
 std::unique_ptr<NativeFunctionDefine> BindingsDefine::functionWithOnlyRuntime(
     hermes::vm::Runtime& _runtime
 ) const {
-  return functionWithNullPrototype(_runtime, std::move(hermes::vm::Handle<hermes::vm::JSObject>::vmcast(
+  return functionWithNullPrototype(_runtime, hermes::vm::Handle<hermes::vm::JSObject>::vmcast(
       &_runtime.functionPrototype
-  )));
+  ));
 }
 
 hermes::vm::CallResult<hermes::vm::HermesValue> callFunctionContext(void *context, hermes::vm::Runtime &runtime, hermes::vm::NativeArgs args)
