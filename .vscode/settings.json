@@ -82,6 +82,7 @@
         "xutility": "cpp",
         "coroutine": "cpp",
         "resumable": "cpp",
-        "*.def": "cpp"
+        "*.def": "cpp",
+        "xstddef": "cpp"
     }
 }

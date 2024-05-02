@@ -84,7 +84,8 @@ impl BindingsDefine_methods for RustBindingsDefine {
 
         let mut function_bind_def: UniquePtr<ffi::NativeFunctionDefine> = bindings_def.functionWithOnlyRuntime(runtime.as_mut());
         let function_name_str = "nativeTest".into_cpp();
-        let symbol_handle_result = bindings_def.getSymbolHandleASCII(runtime.as_mut(), bindings_def.createASCIIRef(function_name_str.as_ref().expect("failed to create ASCII ref"))).within_unique_ptr();
+        let symbol_ref = bindings_def.createASCIIRef(function_name_str.as_ref().expect("failed to create ASCII ref"));
+        let symbol_handle_result = bindings_def.getSymbolHandleASCII(runtime.as_mut(), symbol_ref).within_unique_ptr();
         let symbol_handle = bindings_def.ignoreAllocationFailure(runtime.as_mut(), symbol_handle_result).within_unique_ptr();
         function_bind_def.as_mut().expect("null function bind deref").setFunction(
             symbol_handle.get().within_unique_ptr(),
@@ -110,9 +111,10 @@ fn main() {
     let buffer = (|binary: &Vec<u8>| unsafe {
         return ffi::hermes::Buffer::new1(binary.as_ptr(), binary.len()).within_unique_ptr();
     })(binary.borrow());
+    assert!(!buffer.is_null(), "buffer for hbc bytes was a null pointer");
     let bindings: Rc<RefCell<RustBindingsDefine>> = RustBindingsDefine::new_rust_owned(make_rust_bindings_define());
     bindings.as_ref().borrow_mut().deref_mut().start();
-    let success = ffi::executeHBCBytecode(
+    let success: bool = ffi::executeHBCBytecode(
         buffer,
         input_file_path,
         bindings.as_ref().borrow().as_ref(),

@@ -26,3 +26,6 @@ external/LLVHDemangle.*
 external/include/hermes/
 external/include/llvh/
 external/include/llvh-c/
+external/include/unicode/
+external/include/caml/
+external/include/flowparser/

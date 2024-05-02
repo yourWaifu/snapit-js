@@ -58,6 +58,7 @@ hermes::vm::RuntimeConfig makeRuntimeConfig()
                         .withShouldReleaseUnused(hermes::vm::kReleaseUnusedOld)
                         .withName("hvm-rust")
                         .build())
+      .withEnableBlockScoping(true)
       .withES6Promise(true)
       .withES6Proxy(true)
       .withIntl(true)
@@ -69,6 +70,36 @@ hermes::vm::RuntimeConfig makeRuntimeConfig()
       .build();
 }
 
+struct ExecuteOptions {
+  ExecuteOptions(): runtimeConfig(makeRuntimeConfig()) {}
+
+  hermes::vm::RuntimeConfig runtimeConfig;
+
+    // execution options
+  // to do, make options for these
+  /// Enable basic block profiling.
+  bool basicBlockProfiling{false};
+
+  /// Stop after creating the RuntimeModule.
+  bool stopAfterInit{false};
+
+  /// Execution time limit.
+  uint32_t timeLimit{0};
+
+  /// Perform a full GC just before printing any statistics.
+  bool forceGCBeforeStats{false};
+
+  /// Try to execute the same number of CPU instructions
+  /// across repeated invocations of the same JS.
+  bool stabilizeInstructionCount{false};
+
+  /// Run the sampling profiler.
+  bool sampleProfiling{false};
+
+  /// Start tracking heap objects before executing bytecode.
+  bool heapTimeline{false};
+};
+
 bool executeHBCBytecode(
   std::unique_ptr<hermes::Buffer> bytes,
   const std::string sourceName,
@@ -79,52 +110,26 @@ bool executeHBCBytecode(
     hbc::BCProviderFromBuffer::createBCProviderFromBuffer(
       std::move(bytes)
     ).first);
-  
-  vm::RuntimeConfig runtimeConfig = makeRuntimeConfig();
+  if (!bytecode) {
+    return false;
+  }
+    
+  const ExecuteOptions options = ExecuteOptions{};
+  const std::string *filename = &sourceName;
+
   bool shouldRecordGCStats =
-    runtimeConfig.getGCConfig().getShouldRecordStats();
+      options.runtimeConfig.getGCConfig().getShouldRecordStats();
   if (shouldRecordGCStats) {
     vm::instrumentation::PerfEvents::begin();
   }
 
-  // execution options
-  // to do, make options for these
-/// Enable basic block profiling.
-bool basicBlockProfiling{false};
-
-/// Stop after creating the RuntimeModule.
-bool stopAfterInit{false};
-
-/// Execution time limit.
-uint32_t timeLimit{0};
-
-/// Perform a full GC just before printing any statistics.
-bool forceGCBeforeStats{false};
-
-/// Try to execute the same number of CPU instructions
-/// across repeated invocations of the same JS.
-bool stabilizeInstructionCount{false};
-
-/// Run the sampling profiler.
-bool sampleProfiling{false};
-
-/// Start tracking heap objects before executing bytecode.
-bool heapTimeline{false};
-
   std::unique_ptr<vm::StatSamplingThread> statSampler;
-  auto runtime = vm::Runtime::create(runtimeConfig);
-  if (stabilizeInstructionCount) {
-    // Try to limit features that can introduce unpredictable CPU instruction
-    // behavior. Date is a potential cause, but is not handled currently.
-    vm::MockedEnvironment env;
-    env.stabilizeInstructionCount = true;
-    runtime->setMockedEnvironment(env);
-  }
+  auto runtime = vm::Runtime::create(options.runtimeConfig);
 
-  if (timeLimit > 0) {
+  if (options.timeLimit > 0) {
     runtime->timeLimitMonitor = vm::TimeLimitMonitor::getOrCreate();
     runtime->timeLimitMonitor->watchRuntime(
-        *runtime, std::chrono::milliseconds(timeLimit));
+        *runtime, std::chrono::milliseconds(options.timeLimit));
   }
 
   if (shouldRecordGCStats) {
@@ -132,7 +137,7 @@ bool heapTimeline{false};
         std::chrono::milliseconds(100));
   }
 
-  if (heapTimeline) {
+  if (options.heapTimeline) {
 #ifdef HERMES_MEMORY_INSTRUMENTATION
     runtime->enableAllocationLocationTracker();
 #else
@@ -148,7 +153,7 @@ bool heapTimeline{false};
   vm::RuntimeModuleFlags flags;
   flags.persistent = true;
 
-  if (stopAfterInit) {
+  if (options.stopAfterInit) {
     vm::Handle<vm::Domain> domain =
         runtime->makeHandle(vm::Domain::create(*runtime));
     if (LLVM_UNLIKELY(
@@ -166,14 +171,14 @@ bool heapTimeline{false};
   }
 
 #if HERMESVM_SAMPLING_PROFILER_AVAILABLE
-  if (sampleProfiling) {
+  if (options.sampleProfiling) {
     vm::SamplingProfiler::enable();
   }
 #endif // HERMESVM_SAMPLING_PROFILER_AVAILABLE
 
   llvh::StringRef sourceURL{};
-  if (!sourceName.empty())
-    sourceURL = sourceName;
+  if (filename)
+    sourceURL = *filename;
   vm::CallResult<vm::HermesValue> status = runtime->runBytecode(
       std::move(bytecode),
       flags,
@@ -181,7 +186,7 @@ bool heapTimeline{false};
       vm::Runtime::makeNullHandle<vm::Environment>());
 
 #if HERMESVM_SAMPLING_PROFILER_AVAILABLE
-  if (sampleProfiling) {
+  if (options.sampleProfiling) {
     vm::SamplingProfiler::disable();
     vm::SamplingProfiler::dumpChromeTraceGlobal(llvh::errs());
   }
@@ -239,7 +244,7 @@ bool heapTimeline{false};
     llvh::errs() << "Process stats:\n";
     statSampler->stop().printJSON(llvh::errs());
 
-    if (forceGCBeforeStats) {
+    if (options.forceGCBeforeStats) {
       runtime->collect("forced for stats");
     }
     // to do implement printStats
@@ -247,7 +252,7 @@ bool heapTimeline{false};
   }
 
 #ifdef HERMESVM_PROFILER_BB
-  if (basicBlockProfiling) {
+  if (options.basicBlockProfiling) {
     runtime->getBasicBlockExecutionInfo().dump(llvh::errs());
   }
 #endif

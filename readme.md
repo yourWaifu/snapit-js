@@ -5,7 +5,10 @@ Fast and memory efficient JavaScript runtime for front-ends by using ahead of ti
 ## Build
 Note: only building on Windows is supported
 
-[Download the source code and follow the build instructions from HermesJS. (hermesengine.dev)](https://hermesengine.dev/docs/building-and-running/)
+1. [Download hermes version rn/0.74-stable (github.com)](https://github.com/facebook/hermes/tree/rn/0.74-stable)
+2. Build it but don't follow their build instructions because they are incorrect
+  Watch the build output, you'll want to know where the library files are outputted for later.
+  Look for text like "Build files have been written to:" and "Linking CXX static library".
 
 Afterwards, find the following library files in the build folder, and copy all of them to ``snapit-js/external/``
 
@@ -37,9 +40,14 @@ find the following directories and copy them to ``snapit-js/external/``
 
 All OSs |   Windows |
 ----    |   ----
-{hermes build output}\external\llvh\include\   |   
-include\ |  
-external\llvh\include\  |    
+{hermes build output}\external\llvh\include\  ->  include |   
+include\  ->  include |  
+external\llvh\include\  ->  include |    
+external\llvh\gen\include\  ->  include |    
+public\hermes\  ->  include\hermes |    
+external\flowparser\include\  ->  include |    
+external\icu_decls\  -> include  |
+
 
 change current directory to snapit-js
 
@@ -50,6 +58,11 @@ cd snapit-js
 run cargo build
 ```
 cargo build
+```
+
+run example
+```
+cargo run test.hbc
 ```
 
 ## Performance trade-offs
