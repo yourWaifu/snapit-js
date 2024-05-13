@@ -35,6 +35,7 @@ hermesInstrumentation   |   lib\VM\Instrumentation\hermesInstrumentation.lib
 hermesPlatformUnicode   |   lib\Platform\Unicode\hermesPlatformUnicode.lib
 LLVHSupport |   external\llvh\lib\Support\LLVHSupport.lib
 LLVHDemangle    |    external\llvh\lib\Demangle\LLVHDemangle.lib
+hermesc    |    bin\hermesc .exe and .pdb
 
 find the following directories and copy them to ``snapit-js/external/``
 
@@ -63,6 +64,20 @@ cargo build
 run example
 ```
 cargo run test.hbc
+```
+
+## Use
+
+build JS code
+
+```powershell
+.\external\hermesc .\path\to\code.js -emit-binary -out path\to\output.hbc
+```
+
+run JS code
+
+```
+cargo run path\to\output.hbc
 ```
 
 ## Performance trade-offs

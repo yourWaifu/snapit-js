@@ -23,6 +23,7 @@ external/hermesInstrumentation.*
 external/hermesPlatformUnicode.*
 external/LLVHSupport.*
 external/LLVHDemangle.*
+external/hermesc.*
 external/include/hermes/
 external/include/llvh/
 external/include/llvh-c/
