@@ -37,8 +37,8 @@ hermes::vm::CallResult<hermes::vm::HermesValue> callFunctionContext(void *contex
       *static_cast<BindingsDefine::FunctionContext*>(context);
   /*return */functionContext.func.invoke(
       functionContext.parent,
-      runtime/*,*/
-      /*args*/);
+      runtime,
+      args);
   return hermes::vm::HermesValue::encodeUndefinedValue();
 }
 

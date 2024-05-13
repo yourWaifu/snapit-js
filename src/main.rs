@@ -14,8 +14,9 @@ use std::ops::DerefMut;
 
 include_cpp! {
     #include "wrapper.hpp"
-    safety!(unsafe_ffi)
     generate!("hermes::Buffer")
+    safety!(unsafe_ffi)
+    generate!("Handle")
     generate!("hermes::vm::GCScopeMarkerRAII")
     //generate!("hermes::vm::Runtime")
     //generate!("hermes::vm::IdentifierTable")
@@ -23,6 +24,8 @@ include_cpp! {
     generate!("hermes::vm::DefinePropertyFlags")
     generate!("NativeFunctionDefine")
     //generate!("hermes::vm::NativeArgs")
+    generate!("Arguments")
+    generate!("Value")
     generate!("NativeVFunctionReturnValue")
     generate!("hermes::vm::ASCIIRef")
     generate!("hermes::vm::SymbolID")
@@ -35,6 +38,8 @@ include_cpp! {
     //generate!("hermes::vm::ExecutionStatus")
     //generate!("hermes::vm::Predefined")
     //generate!("hermes::vm::createUTF16Ref")
+    generate!("StringPrimitiveHandle")
+    generate!("hermes::vm::StringView")
     generate!("executeHBCBytecode")
 }
 
@@ -46,11 +51,46 @@ impl ffi::NativeVFunction_methods for BasicRustJSFunction {
     fn invoke(
         &self,
         context: &ffi::BindingsDefine,
-        runtime: Pin<&mut ffi::hermes::vm::Runtime>/*,*/
-        //args: &ffi::hermes::vm::NativeArgs
+        mut runtime: Pin<&mut ffi::hermes::vm::Runtime>,
+        args: Pin<&mut ffi::hermes::vm::NativeArgs>
     ) -> cxx::UniquePtr<ffi::NativeVFunctionReturnValue> {
-        println!("invoke called");
-        return ffi::NativeVFunctionReturnValue::encodeUndefined().within_unique_ptr();
+        println!("invoke called with {} args", ffi::Arguments::getArgCount(args.borrow()).0);
+        let undefined = ffi::NativeVFunctionReturnValue::encodeUndefined().within_unique_ptr();
+        if ffi::Arguments::getArgCount(args.borrow()).0 < 1 {
+            return undefined
+        }
+        {
+            let argument_value = ffi::Arguments::getArg(args.borrow(), autocxx::c_uint::from(0)).within_unique_ptr();
+            let argument = (|argument_value: &ffi::Value| unsafe {
+                match argument_value.isNumber() {
+                    true => Some(argument_value.getNumber(std::ptr::null_mut())),
+                    false => None,
+                }
+            })(argument_value.borrow()).expect("expected argument to be a number");
+            println!("argment is {}", argument);
+        }
+        if ffi::Arguments::getArgCount(args.borrow()).0 < 2 {
+            return undefined;
+        }
+        let argument_handle = ffi::Arguments::getArgHandle(args.borrow(), autocxx::c_uint::from(1)).within_unique_ptr();
+        let mut argument_string = (|argument_handle: &ffi::Handle| unsafe {
+            match argument_handle.isAStringPrimitiveHandle() {
+                true => Some(argument_handle.castToStringPrimitiveHandle(std::ptr::null_mut()).within_unique_ptr()),
+                false => None,
+            }
+        })(argument_handle.borrow()).expect("expected argument to be a string");
+        let argument_string_view = argument_string.as_mut().expect("invalid pointer to string").createStringView(runtime.as_mut()).within_unique_ptr();
+        let argument_encoding =  argument_string_view.as_ref().expect("invalid string view pointer").isASCII();
+        println!("argment is in {} encoding", if argument_encoding { "ASCII" } else { "UTF16" });
+        if argument_encoding == false {
+            unsafe {
+                let argument_string_slice = core::slice::from_raw_parts(argument_string_view.castToChar16Ptr(), argument_string_view.length());
+                for argument_char16 in argument_string_slice.iter() {
+                    print!("{:X?} ", argument_char16.0);
+                }
+            }
+        }
+        return undefined;
     }
 }
 
@@ -107,7 +147,8 @@ fn main() {
 
     let binary: Box<Vec<u8>> = Box::new(fs::read(input_file_path)
         .expect("file read fail"));
-    // to do, figure out how to make this safe.
+    // buffer should be safe since its lifetime relies on binary outliving it
+    // and buffer dies after exit and binary dies after exit
     let buffer = (|binary: &Vec<u8>| unsafe {
         return ffi::hermes::Buffer::new1(binary.as_ptr(), binary.len()).within_unique_ptr();
     })(binary.borrow());

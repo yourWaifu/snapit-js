@@ -46,8 +46,8 @@ public:
 
     virtual ReturnValue invoke(
         const BindingsDefine& context,
-        hermes::vm::Runtime& runtime/*,*/
-        //hermes::vm::NativeArgs& args
+        hermes::vm::Runtime& runtime,
+        hermes::vm::NativeArgs& args
     ) const {
         return hermes::vm::HermesValue::encodeUndefinedValue();
     };
@@ -84,6 +84,42 @@ public:
     }
 private:
     hermes::vm::CallResult<hermes::vm::Handle<hermes::vm::SymbolID>> base;
+};
+
+struct StringPrimitiveHandle {
+public:
+    using type_value = hermes::vm::StringPrimitive;
+    
+    StringPrimitiveHandle(hermes::vm::Handle<hermes::vm::StringPrimitive> _base): base(_base) {}
+
+    inline hermes::vm::Handle<hermes::vm::StringPrimitive> unwrapWrapper() const {
+        return base;
+    }
+
+    inline hermes::vm::StringView createStringView(hermes::vm::Runtime& runtime) const {
+        return hermes::vm::StringPrimitive::createStringView(runtime, base);
+    }
+
+private:
+    hermes::vm::Handle<hermes::vm::StringPrimitive> base;
+};
+
+struct BigIntPrimitiveHandle {
+public:
+    using type_value = hermes::vm::BigIntPrimitive;
+
+    BigIntPrimitiveHandle(hermes::vm::Handle<hermes::vm::BigIntPrimitive> _base): base(_base) {}
+
+    inline hermes::vm::Handle<hermes::vm::BigIntPrimitive> unwrapWrapper() const {
+        return base;
+    }
+
+    hermes::vm::BigIntPrimitive& view() const {
+        return *base.get();
+    }
+
+private:
+    hermes::vm::Handle<hermes::vm::BigIntPrimitive> base;
 };
 
 class BindingsDefine {
@@ -242,4 +278,98 @@ struct NativeFunctionDefine {
 
 private:
     const BindingsDefine::FunctionContext* functionContext;
+};
+
+struct Value;
+struct Handle;
+
+template<typename T>
+hermes::vm::Handle<T> castHandle(const Handle& handle) /*unsafe*/ {
+    return hermes::vm::Handle<T>::vmcast(handle.base);
+}
+
+template<typename T>
+bool isAHandle(hermes::vm::HermesValue value) {
+    return hermes::vm::vmisa<T>(value);
+}
+
+struct Handle {
+public:
+    // wrapper for handle and rust will handle the template parts
+    Handle(hermes::vm::HandleBase&& other) : base(std::move(other)) {}
+
+    bool isASymbolIDHandle() const { return getValue().isSymbol(); }
+    bool isAStringPrimitiveHandle() const { return isAHandle<hermes::vm::StringPrimitive>(getValue()); }
+    bool isABigIntPrimitiveHandle() const { return isAHandle<hermes::vm::BigIntPrimitive>(getValue()); }
+    // the following need to be used with option in Rust to make them safe
+    hermes::vm::HermesValue getValue() const { return base.getHermesValue(); }
+    SymbolIDHandle castToSymbolIDHandle(void*) /*unsafe*/ const { return castHandle<hermes::vm::SymbolID>(*this); }
+    StringPrimitiveHandle castToStringPrimitiveHandle(void*) /*unsafe*/ const { return castHandle<hermes::vm::StringPrimitive>(*this); }
+    BigIntPrimitiveHandle castToBigIntPrimitiveHandle(void*) /*unsafe*/ const { return castHandle<hermes::vm::BigIntPrimitive>(*this); }
+
+    hermes::vm::HandleBase base;
+private:
+};
+
+struct Value {
+public:
+
+    Value(hermes::vm::HermesValue&& other) : base(std::move(other)) {}
+
+    static hermes::vm::HermesValue encodeUndefined() { return hermes::vm::HermesValue::encodeUndefinedValue(); }
+    static hermes::vm::HermesValue encodeNaNValue() { return hermes::vm::HermesValue::encodeNaNValue(); }
+
+    inline Value updatePointer(void* ptr) /*unsafe*/ const { return base.updatePointer(ptr); }
+    inline void setPointer(void* ptr) /*unsafe*/ { return base.unsafeUpdatePointer(ptr); }
+
+    inline bool isNull() const { return base.isNull(); }
+    inline bool isUndefined() const { return base.isUndefined(); }
+    inline bool isEmpty() const { return base.isEmpty(); }
+    inline bool isNativeValue() const { return base.isNativeValue(); }
+    inline bool isSymbol() const { return base.isSymbol(); }
+    inline bool isBool() const { return base.isBool(); }
+    inline bool isObject() const { return base.isObject(); }
+    inline bool isString() const { return base.isString(); }
+    inline bool isBigInt() const { return base.isBigInt(); }
+    inline bool isDouble() const { return base.isDouble(); }
+    inline bool isPointer() const { return base.isPointer(); }
+    inline bool isNumber() const { return base.isNumber(); }
+    inline hermes::vm::HermesValue::RawType getRaw() const { return base.getRaw(); }
+    // the following need to be used with option in Rust to make them safe
+    inline void* getPointer() /*unsafe*/ const { return base.getPointer(); }
+    inline double getDouble(void*) /*unsafe*/ const { return base.getDouble(); }
+    inline uint32_t getNativeUInt32(void*) /*unsafe*/ const { return base.getNativeUInt32(); }
+    //inline hermes::vm::SymbolID getSymbol(void*) /*unsafe*/ const { return base.getSymbol(); }
+    inline bool getBool(void*) /*unsafe*/ const { return base.getBool(); }
+    //inline hermes::vm::StringPrimitive /*unsafe*/ getString(void*) const { return base.getString(); }
+    //inline hermes::vm::BigIntPrimitive /*unsafe*/ getBigInt(void*) const { return base.getBigInt(); }
+    //inline void* getObject(void*) /*unsafe*/ const { return base.getObject() }
+    inline double getNumber(void*) /*unsafe*/ const { return base.getNumber(); }
+
+    hermes::vm::HermesValue base;
+private:
+};
+
+struct Arguments {
+public:
+    inline static unsigned getArgCount(const hermes::vm::NativeArgs& base) {
+        return base.getArgCount();
+    }
+
+    // can't compile, needs a wrapper for ConstArgIterator or reverse_iterator
+    /*inline static hermes::vm::ConstArgIterator begin(const hermes::vm::NativeArgs& base) {
+        return base.begin();
+    }*/
+
+    // getArg is safe as it return undefined if out of range
+    inline static Value getArg(const hermes::vm::NativeArgs& base, unsigned index) {
+        return std::move(base.getArg(index));
+    }
+
+    // getArgHandle is safe as it return undefined handle if out of range
+    inline static Handle getArgHandle(const hermes::vm::NativeArgs& base, unsigned index) {
+        return std::move(base.getArgHandle(index));
+    }
+    
+private:
 };
